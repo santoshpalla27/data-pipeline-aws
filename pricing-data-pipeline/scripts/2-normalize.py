@@ -2,6 +2,7 @@
 """
 Normalize downloaded AWS pricing JSON into SQL database format.
 Outputs: PostgreSQL dump, SQLite database, CSV files
+FIXED: Proper handling of product ID mapping to prevent orphaned prices
 """
 
 import json
@@ -30,7 +31,9 @@ class PricingNormalizer:
         self.stats = {
             'files_processed': 0,
             'products_imported': 0,
+            'products_updated': 0,
             'prices_imported': 0,
+            'prices_skipped': 0,
             'errors': 0
         }
     
@@ -79,7 +82,7 @@ class PricingNormalizer:
                 description TEXT,
                 FOREIGN KEY (product_id) REFERENCES products(id),
                 FOREIGN KEY (region_id) REFERENCES regions(id),
-                UNIQUE(product_id, region_id, term_type)
+                UNIQUE(product_id, region_id, term_type, unit, description)
             )
         ''')
         
@@ -99,6 +102,7 @@ class PricingNormalizer:
             return row[0]
         
         self.cursor.execute('INSERT INTO services (code, name) VALUES (?, ?)', (code, code))
+        self.conn.commit()
         return self.cursor.lastrowid
     
     def get_or_create_region(self, code):
@@ -109,7 +113,36 @@ class PricingNormalizer:
             return row[0]
         
         self.cursor.execute('INSERT INTO regions (code, name) VALUES (?, ?)', (code, code))
+        self.conn.commit()
         return self.cursor.lastrowid
+    
+    def get_or_create_product(self, service_id, sku, product_family, attributes_json):
+        """
+        Get product ID, create or update if doesn't exist.
+        FIXED: Properly returns existing product ID to prevent orphaned prices.
+        """
+        # First, try to find existing product by SKU
+        self.cursor.execute('SELECT id FROM products WHERE sku = ?', (sku,))
+        row = self.cursor.fetchone()
+        
+        if row:
+            # Product exists, update it
+            product_id = row[0]
+            self.cursor.execute('''
+                UPDATE products 
+                SET service_id = ?, product_family = ?, attributes = ?
+                WHERE id = ?
+            ''', (service_id, product_family, attributes_json, product_id))
+            self.stats['products_updated'] += 1
+            return product_id
+        else:
+            # Product doesn't exist, insert it
+            self.cursor.execute('''
+                INSERT INTO products (service_id, sku, product_family, attributes)
+                VALUES (?, ?, ?, ?)
+            ''', (service_id, sku, product_family, attributes_json))
+            self.stats['products_imported'] += 1
+            return self.cursor.lastrowid
     
     def normalize_file(self, file_path, service_code, region_code):
         """Normalize a single pricing JSON file"""
@@ -120,22 +153,21 @@ class PricingNormalizer:
             service_id = self.get_or_create_service(service_code)
             region_id = self.get_or_create_region(region_code)
             
-            # Import products
+            # Import products with proper ID tracking
             products = data.get('products', {})
             sku_to_id = {}
             
             for sku, product in products.items():
-                self.cursor.execute('''
-                    INSERT OR REPLACE INTO products (service_id, sku, product_family, attributes)
-                    VALUES (?, ?, ?, ?)
-                ''', (
+                product_id = self.get_or_create_product(
                     service_id,
                     sku,
                     product.get('productFamily'),
                     json.dumps(product.get('attributes', {}))
-                ))
-                sku_to_id[sku] = self.cursor.lastrowid
-                self.stats['products_imported'] += 1
+                )
+                sku_to_id[sku] = product_id
+            
+            # Commit products before prices
+            self.conn.commit()
             
             # Import prices
             terms = data.get('terms', {})
@@ -143,6 +175,8 @@ class PricingNormalizer:
             
             for sku, term_data in on_demand.items():
                 if sku not in sku_to_id:
+                    logger.warning(f"SKU {sku} not found in products, skipping prices")
+                    self.stats['prices_skipped'] += 1
                     continue
                 
                 product_id = sku_to_id[sku]
@@ -155,8 +189,9 @@ class PricingNormalizer:
                         except:
                             price = 0.0
                         
+                        # Use INSERT OR IGNORE to handle duplicates gracefully
                         self.cursor.execute('''
-                            INSERT OR REPLACE INTO prices 
+                            INSERT OR IGNORE INTO prices 
                             (product_id, region_id, term_type, unit, price_per_unit, description)
                             VALUES (?, ?, ?, ?, ?, ?)
                         ''', (
@@ -167,15 +202,19 @@ class PricingNormalizer:
                             price,
                             dimension.get('description')
                         ))
-                        self.stats['prices_imported'] += 1
+                        
+                        if self.cursor.rowcount > 0:
+                            self.stats['prices_imported'] += 1
             
             self.conn.commit()
             self.stats['files_processed'] += 1
-            logger.info(f"✓ Processed {service_code}/{region_code}")
+            logger.info(f"✓ Processed {service_code}/{region_code} - "
+                       f"{len(sku_to_id)} products")
             
         except Exception as e:
             logger.error(f"✗ Error processing {file_path}: {e}")
             self.stats['errors'] += 1
+            self.conn.rollback()
     
     def normalize_all(self):
         """Normalize all downloaded pricing files"""
@@ -202,6 +241,26 @@ class PricingNormalizer:
                     self.normalize_file(pricing_file, service_code, region_code)
         
         self.conn.commit()
+    
+    def verify_integrity(self):
+        """Verify data integrity after normalization"""
+        logger.info("\nVerifying data integrity...")
+        
+        # Check for orphaned prices
+        self.cursor.execute('''
+            SELECT COUNT(*) 
+            FROM prices pr 
+            LEFT JOIN products p ON pr.product_id = p.id 
+            WHERE p.id IS NULL
+        ''')
+        orphaned_prices = self.cursor.fetchone()[0]
+        
+        if orphaned_prices > 0:
+            logger.error(f"❌ Found {orphaned_prices} orphaned prices!")
+            return False
+        else:
+            logger.info("✓ No orphaned prices found")
+            return True
     
     def export_postgresql_dump(self):
         """Export PostgreSQL dump"""
@@ -247,7 +306,7 @@ CREATE TABLE IF NOT EXISTS prices (
     price_per_unit NUMERIC(20,10),
     currency VARCHAR(3) DEFAULT 'USD',
     description TEXT,
-    UNIQUE(product_id, region_id, term_type)
+    UNIQUE(product_id, region_id, term_type, unit, description)
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
@@ -319,8 +378,10 @@ CREATE INDEX IF NOT EXISTS idx_prices_region ON prices(region_id);
         logger.info("NORMALIZATION SUMMARY")
         logger.info("="*60)
         logger.info(f"Files processed: {self.stats['files_processed']}")
-        logger.info(f"Products imported: {self.stats['products_imported']}")
+        logger.info(f"Products created: {self.stats['products_imported']}")
+        logger.info(f"Products updated: {self.stats['products_updated']}")
         logger.info(f"Prices imported: {self.stats['prices_imported']}")
+        logger.info(f"Prices skipped (duplicate): {self.stats['prices_skipped']}")
         logger.info(f"Errors: {self.stats['errors']}")
         logger.info("="*60)
         logger.info(f"SQLite database: {self.db_path.absolute()}")
@@ -336,14 +397,26 @@ def main():
     
     try:
         normalizer.normalize_all()
-        # Only export if we processed something or if we want empty exports
+        
+        # Verify integrity before exporting
+        if not normalizer.verify_integrity():
+            logger.error("\n❌ Data integrity check failed!")
+            logger.error("Please review errors and re-run normalization.")
+            return False
+        
         normalizer.export_postgresql_dump()
         normalizer.export_csv()
         normalizer.print_summary()
+        
+        logger.info("\n✓ Normalization completed successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"\n❌ Normalization failed: {e}")
+        return False
     finally:
         normalizer.close()
-    
-    logger.info("Normalization completed")
 
 if __name__ == '__main__':
-    main()
+    success = main()
+    exit(0 if success else 1)
