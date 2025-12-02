@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+output/
+.env
+.DS_Store
+
+# Pricing Data Pipeline
+pricing-data-pipeline/output/
+pricing-data-pipeline/.env
+pricing-data-pipeline/__pycache__/
+pricing-data-pipeline/*.pyc
+
+# Temporary Scripts
+pricing-data-pipeline/analyze_data.py
+pricing-data-pipeline/verify_*.py
+pricing-data-pipeline/debug_*.py
+pricing-data-pipeline/download_missing.py
+
+# Utility Scripts
+pricing-data-pipeline/combine_files.ps1
+pricing-data-pipeline/combined-code.txt
