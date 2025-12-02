@@ -41,6 +41,13 @@ export AWS_REGION="us-east-1"
 ./scripts/3-sync.sh --db-url "$DATABASE_URL"
 ```
 
+or 
+
+python /scripts/1-download.py
+python /scripts/2-normalize.py
+python /scripts/3-sync.sh --db-url "$DATABASE_URL"
+
+
 ### Scenario 2: Monthly Update
 ```bash
 # Run on your laptop or CI/CD
