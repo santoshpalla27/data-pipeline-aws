@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   pricing-downloader:
     build:
@@ -8,29 +6,19 @@ services:
     image: aws-pricing-downloader:2.0.0
     container_name: aws-pricing-downloader
 
-    # Fixed volume mounts - match default config paths
+    # Mount to /app/data/aws_pricing (where config writes by default)
     volumes:
-      - ./data/aws_pricing:/data/aws_pricing
-      - ./metrics:/metrics
+      - ./data/aws_pricing:/app/data/aws_pricing:rw
+      - ./metrics:/app/metrics:rw
       - ./services.txt:/app/services.txt:ro
 
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
 
-    # Corrected service codes (removed AWSWAF which doesn't exist)
+    # Remove --output-dir and --metrics-dir (use defaults)
     command: >
-      download --services AmazonEC2 AmazonECS AmazonEKS AWSLambda AmazonVPC AWSELB AmazonCloudFront AmazonRoute53 AmazonApiGateway AmazonS3 AmazonRDS AmazonDynamoDB AmazonElastiCache AmazonEFS AmazonMQ AmazonMSK AWSShield AWSSecretsManager AWSSystemsManager awskms AmazonCloudWatch AWSCloudTrail AWSXRay AmazonES AWSConfig AWSQueueService AmazonSNS AmazonStates AWSCodePipeline AWSCodeDeploy
-
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '1.0'
-          memory: 512M
+      download --no-verify --services AmazonEC2 AmazonECS AmazonEKS AWSLambda AmazonVPC AWSELB AmazonCloudFront AmazonRoute53 AmazonApiGateway AmazonS3 AmazonRDS AmazonDynamoDB AmazonElastiCache AmazonEFS AmazonMQ AmazonMSK AWSShield AWSSecretsManager AWSSystemsManager awskms AmazonCloudWatch AWSCloudTrail AWSXRay AmazonES AWSConfig AWSQueueService AmazonSNS AmazonStates AWSCodePipeline AWSCodeDeploy
 
     restart: "no"
 
