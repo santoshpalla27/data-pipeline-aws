@@ -266,3 +266,34 @@ MIT License
 
 - GitHub Issues: https://github.com/example/aws-pricing-downloader/issues
 - Email: architect @example.com
+
+
+
+
+
+
+
+📝 Summary
+✅ Working Services (28)
+EC2, ECS, EKS, Lambda, VPC
+ELB, CloudFront, Route 53, API Gateway
+S3, RDS, DynamoDB, ElastiCache, EFS
+MQ, MSK, Shield, Secrets Manager
+Systems Manager, KMS, CloudWatch
+CloudTrail, X-Ray, OpenSearch, Config, SNS, CodePipeline, CodeDeploy
+❌ Services That Don't Exist
+AmazonSQS
+→ Use
+AWSQueueService
+AWSStepFunctions
+→ Use
+AmazonStates
+AWSCodeBuild
+→ Use
+AWSCodeCommit
+or remove (no pricing)
+AWSWAFv2
+→ Use
+AWSWAF
+AmazonEventBridge
+→ Part of CloudWatch Events (no separate pricing)

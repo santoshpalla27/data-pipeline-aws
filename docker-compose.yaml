@@ -8,18 +8,29 @@ services:
     image: aws-pricing-downloader:2.0.0
     container_name: aws-pricing-downloader
 
-    # Use Docker volumes (persistent)
+    # Bind mounts - data persists on host filesystem
     volumes:
-      - pricing-data:/data/aws_pricing
-      - pricing-metrics:/metrics
+      - ./data:/data/aws_pricing
+      - ./metrics:/metrics
       - ./services.txt:/app/services.txt:ro
 
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
 
+    # Updated with corrected service codes
     command: >
-      download --services AmazonEC2 AmazonECS AmazonEKS AWSLambda AmazonVPC AWSELB AmazonCloudFront AmazonRoute53 AmazonApiGateway AmazonS3 AmazonRDS AmazonDynamoDB AmazonElastiCache AmazonEFS AmazonMQ AmazonMSK AWSWAFv2 AWSShield AWSSecretsManager AWSSystemsManager awskms AmazonCloudWatch AWSCloudTrail AWSXRay AmazonES AWSConfig AmazonSQS AmazonSNS AWSStepFunctions AWSCodePipeline AWSCodeBuild AWSCodeDeploy AmazonEventBridge
+      download --services AmazonEC2 AmazonECS AmazonEKS AWSLambda AmazonVPC AWSELB AmazonCloudFront AmazonRoute53 AmazonApiGateway AmazonS3 AmazonRDS AmazonDynamoDB AmazonElastiCache AmazonEFS AmazonMQ AmazonMSK AWSWAF AWSShield AWSSecretsManager AWSSystemsManager awskms AmazonCloudWatch AWSCloudTrail AWSXRay AmazonES AWSConfig AWSQueueService AmazonSNS AmazonStates AWSCodePipeline AWSCodeDeploy
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
 
     restart: "no"
 
@@ -28,9 +39,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-volumes:
-  pricing-data:
-    driver: local
-  pricing-metrics:
-    driver: local
