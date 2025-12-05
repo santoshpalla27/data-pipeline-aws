@@ -14,7 +14,7 @@ AmazonElastiCache
 AmazonEFS
 AmazonMQ
 AmazonMSK
-AWSWAFv2
+AWSWAF
 AWSShield
 AWSSecretsManager
 AWSSystemsManager
@@ -24,10 +24,9 @@ AWSCloudTrail
 AWSXRay
 AmazonES
 AWSConfig
-AmazonSQS
+AWSQueueService
 AmazonSNS
-AWSStepFunctions
+AmazonStates
 AWSCodePipeline
-AWSCodeBuild
+AWSCodeCommit
 AWSCodeDeploy
-AmazonEventBridge
