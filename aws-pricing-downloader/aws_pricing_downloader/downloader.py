@@ -216,12 +216,15 @@ class PricingDownloader:
         start_time = time.time()
         
         try:
-            # Get metadata first
-            metadata = await self.http_client.head(url)
-            etag = metadata.get("etag")
+            file_path = self.storage.get_file_path(service_code)
+            file_exists = file_path.exists()
             
-            # Check if download needed
-            if self.config.verify_integrity:
+            # CRITICAL FIX: Don't send ETag if local file doesn't exist
+            metadata = await self.http_client.head(url)
+            etag = metadata.get("etag") if file_exists else None
+            
+            # Check if download needed (ONLY if file exists)
+            if self.config.verify_integrity and file_exists:
                 if not self.integrity.should_download(service_code, etag):
                     self.logger.info(
                         "Using cached service pricing (integrity verified)",
@@ -239,28 +242,43 @@ class PricingDownloader:
                         cache_hit=True,
                     )
                     
-                    return self.storage.get_file_path(service_code)
+                    return file_path
             
-            # Stream download
+            # Stream download (send ETag only if file exists)
             content_iterator, stream_metadata = await self.http_client.stream_get(
                 url=url,
                 etag=etag,
             )
             
-            # Handle cache hit
+            # CRITICAL FIX: Handle 304 but file missing
             if stream_metadata["cache_hit"]:
-                duration_ms = int((time.time() - start_time) * 1000)
-                size = self.storage.get_file_size(service_code) or 0
-                
-                self.metrics.record_download(
-                    service_code=service_code,
-                    success=True,
-                    duration_ms=duration_ms,
-                    size_bytes=size,
-                    cache_hit=True,
-                )
-                
-                return self.storage.get_file_path(service_code)
+                if not file_exists:
+                    # Got 304 but file missing - force re-download
+                    self.logger.warning(
+                        "Got 304 Not Modified but file missing, forcing re-download",
+                        extra={"service_code": service_code, "url": url}
+                    )
+                    
+                    # Re-download without ETag
+                    content_iterator, stream_metadata = await self.http_client.stream_get(
+                        url=url,
+                        etag=None,
+                        last_modified=None,
+                    )
+                else:
+                    # 304 and file exists - use cached
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    size = self.storage.get_file_size(service_code) or 0
+                    
+                    self.metrics.record_download(
+                        service_code=service_code,
+                        success=True,
+                        duration_ms=duration_ms,
+                        size_bytes=size,
+                        cache_hit=True,
+                    )
+                    
+                    return file_path
             
             # Save streamed content
             file_path, size_bytes = await self.storage.save_stream(
