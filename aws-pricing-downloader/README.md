@@ -297,3 +297,7 @@ AWSWAFv2
 AWSWAF
 AmazonEventBridge
 → Part of CloudWatch Events (no separate pricing)
+
+
+
+https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/index.json -- any other service to fetch from aws pricing api get the service code from here
