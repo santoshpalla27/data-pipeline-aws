@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aws-pricing-downloader"
+version = "1.0.0"
+description = "Enterprise-grade AWS pricing data downloader"
+authors = [{name = "Senior Python Architect", email = "architect @example.com"}]
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+
+dependencies = [
+    "aiohttp>=3.9.0,<4.0.0",
+    "tenacity>=8.2.0,<9.0.0",
+    "pydantic>=2.5.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0,<8.0.0",
+    "pytest-asyncio>=0.21.0,<0.22.0",
+    "pytest-mock>=3.12.0,<4.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+]
+
+[project.scripts]
+aws-price = "aws_pricing_downloader.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --cov=aws_pricing_downloader --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["aws_pricing_downloader"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
