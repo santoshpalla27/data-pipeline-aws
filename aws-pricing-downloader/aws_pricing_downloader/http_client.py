@@ -105,9 +105,10 @@ class HttpClient:
             """Custom retry condition."""
             if isinstance(exception, HttpError):
                 # Only retry specific status codes
-                if exception.status_code:
+                if exception.status_code is not None:
                     return self._should_retry(exception.status_code)
-                return False
+                # Retry if no status code (network error)
+                return True
             # Retry on network errors
             return isinstance(exception, (aiohttp.ClientError, asyncio.TimeoutError))
         
@@ -117,7 +118,7 @@ class HttpClient:
                 min=self.config.retry_min_wait,
                 max=self.config.retry_max_wait,
             ),
-            retry=retry_if_exception_type((HttpError, aiohttp.ClientError, asyncio.TimeoutError)),
+            retry=retry_condition,
             retry_error_callback=lambda retry_state: None,
             before_sleep=before_sleep_log(logger, logging.WARNING),
             reraise=True,

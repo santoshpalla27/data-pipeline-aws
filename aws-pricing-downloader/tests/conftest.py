@@ -20,11 +20,11 @@ def temp_dir():
 def test_config(temp_dir: Path) -> DownloaderConfig:
     """Create test configuration."""
     return load_config(
-        cache_dir=temp_dir / "cache",
         output_dir=temp_dir / "output",
+        metrics_dir=temp_dir / "metrics",
         max_concurrent_downloads=5,
         tcp_connector_limit=10,
-        request_timeout=30,
+        total_timeout=30,
         max_retries=3,
         log_level="DEBUG",
     )

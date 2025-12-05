@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  pricing-downloader:
+    build:
+      context: ./aws-pricing-downloader
+      dockerfile: Dockerfile
+    image: aws-pricing-downloader:2.0.0
+    container_name: aws-pricing-downloader
+
+    # Mount volumes for data persistence
+    volumes:
+      - ./data:/data/aws_pricing
+      - ./metrics:/metrics
+      - ./services.txt:/app/services.txt:ro
+
+    # Environment variables 
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    # Download specific services from file
+
+    command: download --services AmazonEC2 AmazonECS AmazonEKS AWSLambda AmazonVPC AWSELB AmazonCloudFront AmazonRoute53 AmazonApiGateway AmazonS3 AmazonRDS AmazonDynamoDB AmazonElastiCache AmazonEFS AmazonMQ AmazonMSK AWSWAFv2 AWSShield AWSSecretsManager AWSSystemsManager awskms AmazonCloudWatch AWSCloudTrail AWSXRay AmazonES AWSConfig AmazonSQS AmazonSNS AWSStepFunctions AWSCodePipeline AWSCodeBuild AWSCodeDeploy AmazonEventBridge
+    # Restart policy
+    restart: "no" # One-time run
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pricing-data:
+    driver: local
+  pricing-metrics:
+    driver: local

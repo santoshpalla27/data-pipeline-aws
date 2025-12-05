@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-cov lint format clean build docker-build docker-run
+.PHONY: help install install-dev test test-cov lint format clean build docker-build docker-run run-from-file
 
 # Variables
 PYTHON := python3
@@ -23,8 +23,9 @@ help:
 	@echo "  build          Build package"
 	@echo "  docker-build   Build Docker image"
 	@echo "  docker-run     Run Docker container"
-	@echo "  run            Run downloader locally"
+	@echo "  run            Run downloader locally (all services)"
 	@echo "  run-services   Run downloader for specific services"
+	@echo "  run-from-file  Run downloader from services.txt"
 	@echo ""
 
 install:
@@ -32,7 +33,7 @@ install:
 
 install-dev:
 	$(PIP) install -e ".[dev]"
-	$(PIP) install black flake8 mypy isort
+	$(PIP) install black flake8 mypy isort aiofiles
 
 test:
 	$(PYTEST) tests/ -v
@@ -42,7 +43,7 @@ test-cov:
 
 lint:
 	flake8 aws_pricing_downloader/ tests/ --max-line-length=100
-	mypy aws_pricing_downloader/
+	mypy aws_pricing_downloader/ --ignore-missing-imports
 
 format:
 	black aws_pricing_downloader/ tests/ --line-length=100
@@ -58,7 +59,7 @@ clean:
 	rm -rf .mypy_cache/
 	rm -rf data/
 	rm -rf metrics/
-	find . -type d -name __pycache__ -exec rm -rf {} +
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
 
 build: clean
@@ -80,6 +81,14 @@ run:
 
 run-services:
 	aws-price download --services AmazonEC2 AmazonS3 AWSLambda
+
+run-from-file:
+	@if [ -f services.txt ]; then \
+		aws-price download --services $$(cat services.txt); \
+	else \
+		echo "Error: services.txt not found"; \
+		exit 1; \
+	fi
 
 run-debug:
 	aws-price download --log-level DEBUG --log-file logs/download.log

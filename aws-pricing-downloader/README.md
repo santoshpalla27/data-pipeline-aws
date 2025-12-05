@@ -1,16 +1,18 @@
-# AWS Pricing Downloader
+# AWS Pricing Downloader v2.0
 
-Enterprise-grade Python package for downloading AWS pricing data with intelligent caching and async operations.
+Enterprise-grade Python package for downloading AWS pricing data with streaming, integrity verification, and metrics.
 
 ## Features
 
 - ✅ **Async Downloads**: High-performance async I/O with aiohttp
-- ✅ **Intelligent Caching**: ETag and Last-Modified based caching
-- ✅ **Retry Logic**: Exponential backoff with tenacity
+- ✅ **Streaming**: Memory-efficient 64KB chunk streaming
+- ✅ **SHA256 Integrity**: Detect silent AWS updates
+- ✅ **Retry Logic**: Exponential backoff with status-aware retry
 - ✅ **Structured Logging**: JSON-formatted logs for production
 - ✅ **Concurrency Control**: Configurable concurrent download limits
 - ✅ **Production Ready**: Docker support, comprehensive error handling
 - ✅ **Type Safe**: Pydantic config validation
+- ✅ **Metrics Export**: JSON metrics for monitoring
 
 ## Installation
 
@@ -20,21 +22,49 @@ Enterprise-grade Python package for downloading AWS pricing data with intelligen
 git clone https://github.com/example/aws-pricing-downloader.git
 cd aws-pricing-downloader
 pip install -e .
-With Docker
+```
+
+### With Docker
+
+```bash
 docker build -t aws-pricing-downloader .
-Quick Start
-Download All Services
+```
+
+## Quick Start
+
+### Download All Services
+
+```bash
 aws-price download
-Download Specific Service
-aws-price download --service AmazonEC2
-Custom Configuration
+```
+
+### Download Specific Services
+
+```bash
+aws-price download --services AmazonEC2 AmazonS3 AWSLambda
+```
+
+### Download from File
+
+```bash
+aws-price download --services $(cat services.txt)
+```
+
+### Custom Configuration
+
+```bash
 aws-price download \
     --output-dir ./pricing-data \
-    --cache-dir ./cache \
-    --max-concurrent 50 \
+    --metrics-dir ./metrics \
+    --max-concurrent 30 \
     --log-level INFO
-Usage
-Python API
+```
+
+## Usage
+
+### Python API
+
+```python
 import asyncio
 from aws_pricing_downloader import PricingDownloader
 
@@ -49,256 +79,190 @@ async def main():
         print(f"EC2 pricing: {path}")
 
 asyncio.run(main())
-Configuration
+```
+
+### Configuration
+
+```python
 from aws_pricing_downloader import PricingDownloader, load_config
 
 config = load_config(
     output_dir="./data",
-    cache_dir="./.cache",
+    metrics_dir="./metrics",
     max_concurrent_downloads=50,
-    request_timeout=300,
+    total_timeout=600,
     log_level="INFO",
 )
 
 downloader = PricingDownloader(config)
-Docker Usage
-Build Image
-make docker-build
-Run Container
-docker run --rm \
-    -v $(pwd)/data:/data/aws_pricing \
-    -v $(pwd)/cache:/cache/aws_pricing \
-    aws-pricing-downloader:latest
-Docker Compose
-version: '3.8'
+```
 
-services:
-  pricing-downloader:
-    image: aws-pricing-downloader:latest
-    volumes:
-      - ./data:/data/aws_pricing
-      - ./cache:/cache/aws_pricing
-    environment:
-      - LOG_LEVEL=INFO
-    command: download
-Development
-Setup Development Environment
-make install-dev
-Run Tests
-make test
-Run Tests with Coverage
-make test-cov
-Format Code
-make format
-Lint Code
-make lint
-Architecture
+## Architecture
+
+```
 aws_pricing_downloader/
 ├── __init__.py          # Package initialization
 ├── config.py            # Pydantic configuration
 ├── logger.py            # Structured JSON logging
-├── http_client.py       # Async HTTP client with retry
-├── caching.py           # ETag-based cache manager
+├── http_client.py       # Async HTTP client with streaming
+├── storage.py           # File storage layer
+├── integrity.py         # SHA256 verification
+├── metrics.py           # Metrics collection
 ├── downloader.py        # Main downloader orchestration
 ├── exceptions.py        # Custom exceptions
 └── cli.py              # Command-line interface
-Configuration Options
-Option	Default	Description
-base_url
-https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws
-AWS Pricing API base URL
-cache_dir
-.cache/aws_pricing
-Cache directory path
-output_dir
-data/aws_pricing
-Output directory path
-max_concurrent_downloads
-50
-Max concurrent downloads
-tcp_connector_limit
-100
-TCP connection pool limit
-request_timeout
-300
-HTTP request timeout (seconds)
-max_retries
-5
-Maximum retry attempts
-retry_min_wait
-1
-Minimum retry wait (seconds)
-retry_max_wait
-60
-Maximum retry wait (seconds)
-log_level
-INFO
-Logging level
-Caching
-The downloader uses ETag and Last-Modified headers for intelligent caching:
+```
 
-First Download: Fetches full content and stores ETag/Last-Modified
-Subsequent Downloads: Sends conditional headers
-Cache Hit: Server returns 304, uses cached content
-Cache Miss: Server returns 200 with new content
-Cache structure:
+## Configuration Options
 
-.cache/aws_pricing/
-├── AmazonEC2.etag       # ETag metadata (JSON)
-├── AmazonEC2.json       # Cached pricing data
-├── AmazonS3.etag
-└── AmazonS3.json
-Error Handling
-The package defines custom exceptions:
+| Option | Default | Description |
+|--------|---------|-------------|
+| `base_url` | `https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws` | AWS Pricing API base URL |
+| `output_dir` | `data/aws_pricing` | Output directory path |
+| `metrics_dir` | `metrics` | Metrics directory path |
+| `max_concurrent_downloads` | `50` | Max concurrent downloads |
+| `tcp_connector_limit` | `100` | TCP connection pool limit |
+| `chunk_size` | `65536` | Streaming chunk size (bytes) |
+| `sock_read_timeout` | `30` | Socket read timeout (seconds) |
+| `sock_connect_timeout` | `10` | Socket connect timeout (seconds) |
+| `total_timeout` | `600` | Total request timeout (seconds) |
+| `max_retries` | `5` | Maximum retry attempts |
+| `retry_min_wait` | `2` | Minimum retry wait (seconds) |
+| `retry_max_wait` | `120` | Maximum retry wait (seconds) |
+| `retryable_status_codes` | `{429, 500, 502, 503, 504}` | Status codes to retry |
+| `verify_integrity` | `True` | Enable SHA256 verification |
+| `log_level` | `INFO` | Logging level |
 
-DownloadError
-: General download failures
-HttpError
-: HTTP-specific errors
-CacheError
-: Cache operation failures
-All exceptions include contextual information for debugging.
+## Integrity Verification
 
-Logging
-Structured JSON logs include:
+The downloader uses SHA256 hashing to detect silent AWS updates:
 
+1. **First Download**: Computes SHA256 hash and stores with ETag
+2. **Subsequent Downloads**: Checks ETag and verifies file hash
+3. **Hash Mismatch**: Re-downloads file automatically
+4. **ETag Changed**: Triggers re-download even if hash matches
+
+Storage structure:
+
+```
+data/aws_pricing/
+├── AmazonEC2.json       # Pricing data
+├── AmazonEC2.sha256     # SHA256 + ETag metadata
+├── AmazonS3.json
+└── AmazonS3.sha256
+```
+
+## Error Handling
+
+Custom exceptions with context:
+
+- `DownloadError`: General download failures
+- `HttpError`: HTTP-specific errors with status code
+- `StorageError`: File storage failures
+- `IntegrityError`: Hash verification failures
+
+## Logging
+
+Structured JSON logs:
+
+```json
 {
   "timestamp": "2024-01-01T00:00:00Z",
   "level": "INFO",
   "logger": "aws_pricing_downloader.downloader",
   "message": "Service pricing downloaded",
   "service_code": "AmazonEC2",
-  "output_path": "/data/AmazonEC2.json",
-  "size_bytes": 1048576,
-  "duration_ms": 1234,
+  "size_bytes": 524288000,
+  "duration_ms": 5678,
   "cache_hit": false
 }
-Testing
-Run the full test suite:
+```
 
-pytest tests/ -v --cov=aws_pricing_downloader
-Test with specific markers:
+## Metrics
 
-pytest tests/ -v -m asyncio
-Performance
-Concurrency: 50 simultaneous downloads by default
-Connection Pooling: 100 TCP connections
-Retry Logic: Exponential backoff (1s - 60s)
-Caching: Reduces bandwidth by ~90% on subsequent runs
-Production Deployment
-Kubernetes Example
+Exported to `metrics/latest.json`:
+
+```json
+{
+  "aggregate": {
+    "total_downloads": 33,
+    "successful_downloads": 33,
+    "cache_hits": 15,
+    "cache_hit_rate": 0.45,
+    "success_rate": 1.0,
+    "total_bytes_downloaded": 2456789012,
+    "average_duration_ms": 3471.7
+  },
+  "downloads": [...]
+}
+```
+
+## Testing
+
+```bash
+# Run tests
+pytest tests/ -v
+
+# With coverage
+pytest tests/ --cov=aws_pricing_downloader --cov-report=html
+```
+
+## Performance
+
+- **Memory**: ~100 MB for 50 concurrent 500MB files (streaming)
+- **Concurrency**: 50 simultaneous downloads
+- **Connection Pooling**: 100 TCP connections
+- **Retry Logic**: Exponential backoff (2s - 120s)
+- **Integrity**: SHA256 verification on every download
+
+## Production Deployment
+
+### Docker
+
+```bash
+docker run --rm \
+    -v $(pwd)/data:/data/aws_pricing \
+    -v $(pwd)/metrics:/metrics \
+    aws-pricing-downloader:latest \
+    download --services $(cat services.txt)
+```
+
+### Kubernetes CronJob
+
+```yaml
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: aws-pricing-downloader
 spec:
-  schedule: "0 0 * * *"  # Daily at midnight
+  schedule: "0 0 * * *"
   jobTemplate:
     spec:
       template:
         spec:
           containers:
           - name: downloader
-            image: aws-pricing-downloader:latest
+            image: aws-pricing-downloader:2.0.0
             volumeMounts:
             - name: data
-              mountPath: /data
-            - name: cache
-              mountPath: /cache
+              mountPath: /data/aws_pricing
+            - name: metrics
+              mountPath: /metrics
           volumes:
           - name: data
             persistentVolumeClaim:
               claimName: pricing-data
-          - name: cache
+          - name: metrics
             persistentVolumeClaim:
-              claimName: pricing-cache
+              claimName: pricing-metrics
           restartPolicy: OnFailure
-License
-MIT License - see LICENSE file for details.
+```
 
-Contributing
-Fork the repository
-Create a feature branch
-Make your changes
-Add tests
-Run
-make test
-and
-make lint
-Submit a pull request
-Support
-For issues and questions:
+## License
 
-GitHub Issues: https://github.com/example/aws-pricing-downloader/issues
-Email: architect @example.com
+MIT License
 
----
+## Support
 
-## Example Run Instructions
-
-### 1. Install Dependencies
-
-```bash
-cd aws-pricing-downloader
-pip install -e .
-2. Run Download
-# Download all AWS pricing
-aws-price download
-
-# Download specific service
-aws-price download --service AmazonEC2
-
-# With custom settings
-aws-price download \
-    --output-dir ./data \
-    --cache-dir ./cache \
-    --max-concurrent 30 \
-    --log-level DEBUG \
-    --log-file ./logs/download.log
-3. Docker Run
-# Build image
-make docker-build
-
-# Run container
-docker run --rm \
-    -v $(pwd)/data:/data/aws_pricing \
-    -v $(pwd)/cache:/cache/aws_pricing \
-    aws-pricing-downloader:latest
-4. Run Tests
-# Install dev dependencies
-make install-dev
-
-# Run tests
-make test
-
-# Run with coverage
-make test-cov
-5. Python Script
-import asyncio
-from aws_pricing_downloader import PricingDownloader
-
-async def main():
-    async with PricingDownloader() as downloader:
-        # Download all services
-        paths = await downloader.fetch_all_services()
-        print(f"✓ Downloaded {len(paths)} pricing files")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-Output Structure
-data/aws_pricing/
-├── index.json              # Offer index
-├── AmazonEC2.json          # EC2 pricing
-├── AmazonS3.json           # S3 pricing
-├── AmazonRDS.json          # RDS pricing
-└── ...
-
-.cache/aws_pricing/
-├── index.etag              # Index cache metadata
-├── index.json              # Cached index
-├── AmazonEC2.etag          # EC2 cache metadata
-├── AmazonEC2.json          # Cached EC2 pricing
-└── ...
-This is a complete, production-ready implementation with:
-
-✅ Full async download with aiohttp ✅ ETag + Last-Modified caching ✅ Exponential backoff retry ✅ Structured JSON logging ✅ 50 concurrent downloads ✅ Pydantic config validation ✅ Comprehensive error handling ✅ Docker support ✅ Full test suite ✅ CLI with argparse ✅ Makefile for automation
+- GitHub Issues: https://github.com/example/aws-pricing-downloader/issues
+- Email: architect @example.com

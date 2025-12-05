@@ -339,7 +339,16 @@ class PricingDownloader:
             with open(index_path, "rb") as f:
                 index_data = orjson.loads(f.read())
             
-            service_codes = list(index_data.get("offers", {}).keys())
+            # Handle null or missing offers
+            offers = index_data.get("offers")
+            if offers is None:
+                self.logger.warning(
+                    "Offer index contains null offers",
+                    extra={"index_path": str(index_path)}
+                )
+                return []
+            
+            service_codes = list(offers.keys())
             
             self.logger.info(
                 "Parsed offer index",
@@ -423,9 +432,10 @@ class PricingDownloader:
             self.logger.warning("Download cancelled by user")
             self._shutdown_event.set()
             
-            # Cancel all pending tasks
+            # Cancel all pending tasks (FIXED: exclude current task)
+            current_task = asyncio.current_task()
             for task in asyncio.all_tasks():
-                if not task.done():
+                if task is not current_task and not task.done():
                     task.cancel()
             
             raise
