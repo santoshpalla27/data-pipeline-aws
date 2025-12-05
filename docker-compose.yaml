@@ -18,8 +18,7 @@ services:
 
     # Remove --output-dir and --metrics-dir (use defaults)
     command: >
-      download --no-verify --services  AmazonEC2  AmazonECS  AmazonEKS  AWSLambda  AmazonVPC  AWSELB  ElasticLoadBalancingV2 AmazonCloudFront  AmazonRoute53  AmazonApiGateway  AmazonS3  AmazonRDS  AmazonDynamoDB  AmazonElastiCache  AmazonEFS  AmazonMQ  AmazonMSK  AWSWAF  AWSShield  AWSSecretsManager  AWSSystemsManager  awskms  AmazonCloudWatch  AmazonCloudWatchEvents AWSCloudTrail  AWSXRay  AmazonES  AmazonOpenSearchService AWSConfig  AWSQueueService  AmazonSNS  AmazonStates  AWSCodePipeline  AWSCodeCommit  AWSCodeBuild AWSCodeDeploy
-
+      download --no-verify --services  AmazonEC2 AmazonECS AmazonEKS AWSLambda AmazonVPC AWSELB AmazonCloudFront AmazonRoute53 AmazonApiGateway AmazonS3 AmazonRDS AmazonDynamoDB AmazonElastiCache AmazonEFS AmazonMQ AmazonMSK AWSWAF AWSShield AWSSecretsManager AWSSystemsManager awskms AmazonCloudWatch AmazonCloudWatchEvents AmazonEventBridge AWSCloudTrail AWSXRay AmazonES AmazonOpenSearchService AWSConfig AWSQueueService AmazonSNS AmazonStates AWSCodePipeline AWSCodeCommit AWSCodeBuild AWSCodeDeploy
     restart: "no"
 
     logging:
