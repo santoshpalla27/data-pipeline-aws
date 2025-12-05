@@ -3,6 +3,7 @@ Async HTTP client with streaming, retry logic, and connection pooling.
 """
 
 import asyncio
+import logging  # ← ADD THIS LINE
 import time
 from typing import AsyncIterator
 from pathlib import Path
@@ -302,7 +303,7 @@ class HttpClient:
                 "content_length": int(response.headers.get("Content-Length", 0)),
                 "status": response.status,
                 "cache_hit": False,
-            }
+            )
             
             logger.info(
                 "Streaming GET request started",
