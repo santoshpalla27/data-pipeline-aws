@@ -8,9 +8,9 @@ services:
     image: aws-pricing-downloader:2.0.0
     container_name: aws-pricing-downloader
 
-    # Bind mounts - data persists on host filesystem
+    # Fixed volume mounts - match default config paths
     volumes:
-      - ./data:/data/aws_pricing
+      - ./data/aws_pricing:/data/aws_pricing
       - ./metrics:/metrics
       - ./services.txt:/app/services.txt:ro
 
@@ -18,9 +18,9 @@ services:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
 
-    # Updated with corrected service codes
+    # Corrected service codes (removed AWSWAF which doesn't exist)
     command: >
-      download --services AmazonEC2 AmazonECS AmazonEKS AWSLambda AmazonVPC AWSELB AmazonCloudFront AmazonRoute53 AmazonApiGateway AmazonS3 AmazonRDS AmazonDynamoDB AmazonElastiCache AmazonEFS AmazonMQ AmazonMSK AWSWAF AWSShield AWSSecretsManager AWSSystemsManager awskms AmazonCloudWatch AWSCloudTrail AWSXRay AmazonES AWSConfig AWSQueueService AmazonSNS AmazonStates AWSCodePipeline AWSCodeDeploy
+      download --services AmazonEC2 AmazonECS AmazonEKS AWSLambda AmazonVPC AWSELB AmazonCloudFront AmazonRoute53 AmazonApiGateway AmazonS3 AmazonRDS AmazonDynamoDB AmazonElastiCache AmazonEFS AmazonMQ AmazonMSK AWSShield AWSSecretsManager AWSSystemsManager awskms AmazonCloudWatch AWSCloudTrail AWSXRay AmazonES AWSConfig AWSQueueService AmazonSNS AmazonStates AWSCodePipeline AWSCodeDeploy
 
     # Resource limits
     deploy:
