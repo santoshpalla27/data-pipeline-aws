@@ -4,17 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aws-pricing-downloader"
-version = "1.0.0"
+version = "2.0.0"
 description = "Enterprise-grade AWS pricing data downloader"
-authors = [{name = "Senior Python Architect", email = "architect @example.com"}]
+authors = [{name = "Senior Python Architect", email = "architect@example.com"}]
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 
 dependencies = [
     "aiohttp>=3.9.0,<4.0.0",
+    "aiofiles>=23.2.0,<24.0.0",
     "tenacity>=8.2.0,<9.0.0",
     "pydantic>=2.5.0,<3.0.0",
+    "orjson>=3.9.0,<4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +25,10 @@ dev = [
     "pytest-asyncio>=0.21.0,<0.22.0",
     "pytest-mock>=3.12.0,<4.0.0",
     "pytest-cov>=4.1.0,<5.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "isort>=5.12.0",
 ]
 
 [project.scripts]
@@ -45,3 +51,17 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
 ]
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311', 'py312']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true

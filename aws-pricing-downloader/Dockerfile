@@ -10,7 +10,7 @@ RUN apt-get update && \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Copy requirements first (for layer caching)
 COPY requirements.txt .
 
 # Install Python dependencies
@@ -25,6 +25,9 @@ WORKDIR /app
 # Copy Python dependencies from builder
 COPY --from=builder /root/.local /root/.local
 
+# Make sure scripts in .local are usable
+ENV PATH=/root/.local/bin:$PATH
+
 # Copy application code
 COPY aws_pricing_downloader/ ./aws_pricing_downloader/
 COPY setup.py .
@@ -35,7 +38,7 @@ COPY README.md .
 RUN pip install --no-cache-dir -e .
 
 # Create directories
-RUN mkdir -p /data/aws_pricing /cache/aws_pricing
+RUN mkdir -p /data/aws_pricing /metrics
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -50,6 +53,6 @@ ENTRYPOINT ["aws-price"]
 CMD ["download"]
 
 # Labels
-LABEL maintainer="architect @example.com"
-LABEL version="1.0.0"
+LABEL maintainer="architect@example.com"
+LABEL version="2.0.0"
 LABEL description="Enterprise AWS Pricing Downloader"
