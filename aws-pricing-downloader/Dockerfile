@@ -33,7 +33,6 @@ COPY aws_pricing_downloader/ ./aws_pricing_downloader/
 COPY setup.py .
 COPY pyproject.toml .
 COPY README.md .
-
 COPY services.txt .
 
 # Install application

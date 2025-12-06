@@ -10,7 +10,6 @@ services:
     volumes:
       - ./data/aws_pricing:/app/data/aws_pricing:rw
       - ./metrics:/app/metrics:rw
-      - ./services.txt:/app/services.txt:ro
 
     environment:
       - PYTHONUNBUFFERED=1
