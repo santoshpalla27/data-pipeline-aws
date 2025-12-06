@@ -26,3 +26,26 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  resource-downloader:
+    build:
+      context: ./aws-resource-downloader
+      dockerfile: Dockerfile
+    image: aws-resource-downloader:1.0.0
+    container_name: aws-resource-downloader
+
+    # Output Directory
+    volumes:
+      - ./data/resource_metadata:/app/data/resource_metadata:rw
+
+    # Load credentials from .env file
+    env_file:
+      - .env
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Credentials will be injected from .env automatically
+      # - AWS_PROFILE=default  # Optional if using specific profile
+
+      # Default: Run for all services in us-east-1 (example)
+    command: "--services ec2 s3 --regions us-east-1"
