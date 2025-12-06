@@ -34,6 +34,8 @@ COPY setup.py .
 COPY pyproject.toml .
 COPY README.md .
 
+COPY services.txt .
+
 # Install application
 RUN pip install --no-cache-dir -e .
 
@@ -49,8 +51,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import aws_pricing_downloader; print('healthy')" || exit 1
 
 # Default command
-ENTRYPOINT ["aws-price"]
-CMD ["download"]
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["aws-price download --services $(cat services.txt)"]
 
 # Labels
 LABEL maintainer="architect@example.com"

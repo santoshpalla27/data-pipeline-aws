@@ -17,8 +17,8 @@ services:
       - LOG_LEVEL=INFO
 
     # Use services.txt dynamically
-    entrypoint: [ "/bin/sh", "-c" ]
-    command: "aws-price download --no-verify --services $(cat /app/services.txt)"
+    # entrypoint: [ "/bin/sh", "-c" ]
+    # command: "aws-price download --no-verify --services $(cat /app/services.txt)"
 
     restart: "no"
 
