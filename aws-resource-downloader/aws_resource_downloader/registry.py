@@ -24,68 +24,277 @@ class ServiceRegistry:
         return list(self._services.keys())
 
     def _load_defaults(self):
-        """Load built-in service definitions."""
+        """Load service definitions mapping Pricing Codes to Boto3 APIs."""
         DEFAULT_REGISTRY = {
-            "ec2": {
+            # Compute
+            "AmazonEC2": {
                 "service_name": "ec2",
                 "resources": [
-                    {
-                        "name": "instances",
-                        "api_method": "describe_instances",
-                        "response_key": "Reservations",
-                        "pagination_config": {}
-                    },
-                    {
-                        "name": "volumes",
-                        "api_method": "describe_volumes",
-                        "response_key": "Volumes",
-                        "pagination_config": {}
-                    },
-                    {
-                        "name": "instance_types",
-                        "api_method": "describe_instance_types",
-                        "response_key": "InstanceTypes",
-                        "pagination_config": {}
-                    }
+                    {"name": "instances", "api_method": "describe_instances", "response_key": "Reservations"},
+                    {"name": "volumes", "api_method": "describe_volumes", "response_key": "Volumes"},
+                    {"name": "instance_types", "api_method": "describe_instance_types", "response_key": "InstanceTypes"}
                 ]
             },
-            "rds": {
-                "service_name": "rds",
+            "AmazonECS": {
+                "service_name": "ecs",
                 "resources": [
-                    {
-                        "name": "db_instances",
-                        "api_method": "describe_db_instances",
-                        "response_key": "DBInstances",
-                        "pagination_config": {}
-                    },
-                    {
-                        "name": "db_clusters",
-                        "api_method": "describe_db_clusters",
-                        "response_key": "DBClusters",
-                        "pagination_config": {}
-                    }
+                    {"name": "clusters", "api_method": "list_clusters", "response_key": "clusterArns"}
                 ]
             },
-            "s3": {
-                "service_name": "s3",
-                "resources": [
-                    {
-                        "name": "buckets",
-                        "api_method": "list_buckets",
-                        "response_key": "Buckets",
-                        "regional": False # Global
-                    }
-                ]
-            },
-            "eks": {
+            "AmazonEKS": {
                 "service_name": "eks",
                 "resources": [
-                    {
-                        "name": "clusters",
-                        "api_method": "list_clusters",
-                        "response_key": "clusters",
-                        "pagination_config": {}
-                    }
+                    {"name": "clusters", "api_method": "list_clusters", "response_key": "clusters"}
+                ]
+            },
+            "AWSLambda": {
+                "service_name": "lambda",
+                "resources": [
+                    {"name": "functions", "api_method": "list_functions", "response_key": "Functions"}
+                ]
+            },
+            
+            # Storage
+            "AmazonS3": {
+                "service_name": "s3",
+                "resources": [
+                    {"name": "buckets", "api_method": "list_buckets", "response_key": "Buckets", "regional": False}
+                ]
+            },
+            "AmazonEFS": {
+                "service_name": "efs",
+                "resources": [
+                    {"name": "file_systems", "api_method": "describe_file_systems", "response_key": "FileSystems"}
+                ]
+            },
+            "AmazonFSx": {
+                "service_name": "fsx",
+                "resources": [
+                    {"name": "file_systems", "api_method": "describe_file_systems", "response_key": "FileSystems"}
+                ]
+            },
+            "AWSBackup": {
+                "service_name": "backup",
+                "resources": [
+                    {"name": "backup_plans", "api_method": "list_backup_plans", "response_key": "BackupPlansList"},
+                    {"name": "backup_vaults", "api_method": "list_backup_vaults", "response_key": "BackupVaultList"}
+                ]
+            },
+
+            # Database
+            "AmazonRDS": {
+                "service_name": "rds",
+                "resources": [
+                    {"name": "db_instances", "api_method": "describe_db_instances", "response_key": "DBInstances"},
+                    {"name": "db_clusters", "api_method": "describe_db_clusters", "response_key": "DBClusters"}
+                ]
+            },
+            "AmazonDynamoDB": {
+                "service_name": "dynamodb",
+                "resources": [
+                    {"name": "tables", "api_method": "list_tables", "response_key": "TableNames"}
+                ]
+            },
+            "AmazonElastiCache": {
+                "service_name": "elasticache",
+                "resources": [
+                    {"name": "cache_clusters", "api_method": "describe_cache_clusters", "response_key": "CacheClusters"},
+                    {"name": "replication_groups", "api_method": "describe_replication_groups", "response_key": "ReplicationGroups"}
+                ]
+            },
+
+            # Networking
+            "AmazonVPC": {
+                "service_name": "ec2",
+                "resources": [
+                    {"name": "vpcs", "api_method": "describe_vpcs", "response_key": "Vpcs"},
+                    {"name": "subnets", "api_method": "describe_subnets", "response_key": "Subnets"},
+                    {"name": "security_groups", "api_method": "describe_security_groups", "response_key": "SecurityGroups"}
+                ]
+            },
+            "AWSELB": {
+                "service_name": "elbv2",
+                "resources": [
+                    {"name": "load_balancers", "api_method": "describe_load_balancers", "response_key": "LoadBalancers"}
+                ]
+            },
+            "AmazonRoute53": {
+                "service_name": "route53",
+                "resources": [
+                    {"name": "hosted_zones", "api_method": "list_hosted_zones", "response_key": "HostedZones", "regional": False}
+                ]
+            },
+            "AmazonCloudFront": {
+                "service_name": "cloudfront",
+                "resources": [
+                    {"name": "distributions", "api_method": "list_distributions", "response_key": "DistributionList", "regional": False}
+                ]
+            },
+            "AmazonApiGateway": {
+                "service_name": "apigateway",
+                "resources": [
+                    {"name": "rest_apis", "api_method": "get_rest_apis", "response_key": "items"}
+                ]
+            },
+            "AWSGlobalAccelerator": {
+                "service_name": "globalaccelerator",
+                "resources": [
+                    {"name": "accelerators", "api_method": "list_accelerators", "response_key": "Accelerators", "regional": False}
+                ]
+            },
+
+            # Messaging & Integration
+            "AWSQueueService": {
+                "service_name": "sqs",
+                "resources": [
+                    {"name": "queues", "api_method": "list_queues", "response_key": "QueueUrls"}
+                ]
+            },
+            "AmazonSNS": {
+                "service_name": "sns",
+                "resources": [
+                    {"name": "topics", "api_method": "list_topics", "response_key": "Topics"}
+                ]
+            },
+            "AmazonMQ": {
+                "service_name": "mq",
+                "resources": [
+                    {"name": "brokers", "api_method": "list_brokers", "response_key": "BrokerSummaries"}
+                ]
+            },
+            "AmazonMSK": {
+                "service_name": "kafka",
+                "resources": [
+                    {"name": "clusters", "api_method": "list_clusters", "response_key": "ClusterInfoList"}
+                ]
+            },
+            "awSEvents": {
+                "service_name": "events",
+                "resources": [
+                    {"name": "event_buses", "api_method": "list_event_buses", "response_key": "EventBuses"},
+                    {"name": "rules", "api_method": "list_rules", "response_key": "Rules"}
+                ]
+            },
+
+            # Management & Gov
+            "AmazonCloudWatch": {
+                "service_name": "cloudwatch",
+                "resources": [
+                    {"name": "alarms", "api_method": "describe_alarms", "response_key": "MetricAlarms"}
+                ]
+            },
+            "AWSCloudTrail": {
+                "service_name": "cloudtrail",
+                "resources": [
+                    {"name": "trails", "api_method": "list_trails", "response_key": "Trails"}
+                ]
+            },
+            "AWSConfig": {
+                "service_name": "config",
+                "resources": [
+                    {"name": "configuration_recorders", "api_method": "describe_configuration_recorders", "response_key": "ConfigurationRecorders"}
+                ]
+            },
+            "AWSSystemsManager": {
+                "service_name": "ssm",
+                "resources": [
+                    {"name": "documents", "api_method": "list_documents", "response_key": "DocumentIdentifiers"}
+                ]
+            },
+            "AWSServiceCatalog": {
+                "service_name": "servicecatalog",
+                "resources": [
+                    {"name": "portfolios", "api_method": "list_portfolios", "response_key": "PortfolioDetails"}
+                ]
+            },
+
+            # Security
+            "awskms": {
+                "service_name": "kms",
+                "resources": [
+                    {"name": "keys", "api_method": "list_keys", "response_key": "Keys"}
+                ]
+            },
+            "AWSSecretsManager": {
+                "service_name": "secretsmanager",
+                "resources": [
+                    {"name": "secrets", "api_method": "list_secrets", "response_key": "SecretList"}
+                ]
+            },
+            "awswaf": {
+                "service_name": "wafv2",
+                "resources": [
+                    {"name": "web_acls", "api_method": "list_web_acls", "response_key": "WebACLs", "pagination_config": {"Scope": "REGIONAL"}}
+                ]
+            },
+            "AWSShield": {
+                "service_name": "shield",
+                "resources": [
+                    {"name": "protections", "api_method": "list_protections", "response_key": "Protections", "regional": False}
+                ]
+            },
+            "AWSFMS": {
+                "service_name": "fms",
+                "resources": [
+                    {"name": "policies", "api_method": "list_policies", "response_key": "PolicyList", "regional": False}
+                ]
+            },
+
+            # Developer Tools
+            "AWSCodeCommit": {
+                "service_name": "codecommit",
+                "resources": [
+                    {"name": "repositories", "api_method": "list_repositories", "response_key": "repositories"}
+                ]
+            },
+            "CodeBuild": {
+                "service_name": "codebuild",
+                "resources": [
+                    {"name": "projects", "api_method": "list_projects", "response_key": "projects"}
+                ]
+            },
+            "AWSCodeDeploy": {
+                "service_name": "codedeploy",
+                "resources": [
+                    {"name": "applications", "api_method": "list_applications", "response_key": "applications"}
+                ]
+            },
+            "AWSCodePipeline": {
+                "service_name": "codepipeline",
+                "resources": [
+                    {"name": "pipelines", "api_method": "list_pipelines", "response_key": "pipelines"}
+                ]
+            },
+            "AWSCodeArtifact": {
+                "service_name": "codeartifact",
+                "resources": [
+                    {"name": "domains", "api_method": "list_domains", "response_key": "domains"}
+                ]
+            },
+            "AmazonECR": {
+                "service_name": "ecr",
+                "resources": [
+                    {"name": "repositories", "api_method": "describe_repositories", "response_key": "repositories"}
+                ]
+            },
+            "AWSXRay": {
+                "service_name": "xray",
+                "resources": [
+                    {"name": "groups", "api_method": "get_groups", "response_key": "Groups"}
+                ]
+            },
+            
+            # Others
+            "AmazonKinesis": {
+                "service_name": "kinesis",
+                "resources": [
+                    {"name": "streams", "api_method": "list_streams", "response_key": "StreamNames"}
+                ]
+            },
+            "AmazonStates": {
+                "service_name": "stepfunctions",
+                "resources": [
+                    {"name": "state_machines", "api_method": "list_state_machines", "response_key": "stateMachines"}
                 ]
             }
         }
