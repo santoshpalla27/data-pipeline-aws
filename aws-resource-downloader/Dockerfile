@@ -20,12 +20,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY aws_resource_downloader/ aws_resource_downloader/
+COPY services.txt .
 
 # Create data directory
 RUN mkdir -p /app/data/resource_metadata
 
-# Default entrypoint
-ENTRYPOINT ["python", "-m", "aws_resource_downloader.main"]
-
-# Default command (can be overridden)
-CMD ["--help"]
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["python -m aws_resource_downloader.main --services $(cat services.txt) --regions us-east-1"]

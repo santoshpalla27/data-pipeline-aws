@@ -15,10 +15,6 @@ services:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
 
-    # Use services.txt dynamically
-    # entrypoint: [ "/bin/sh", "-c" ]
-    # command: "aws-price download --no-verify --services $(cat /app/services.txt)"
-
     restart: "no"
 
     logging:
@@ -44,8 +40,3 @@ services:
 
     environment:
       - PYTHONUNBUFFERED=1
-      # Credentials will be injected from .env automatically
-      # - AWS_PROFILE=default  # Optional if using specific profile
-
-      # Default: Run for all services in us-east-1 (example)
-    command: "--services ec2 s3 --regions us-east-1"
