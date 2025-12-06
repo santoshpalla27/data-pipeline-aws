@@ -74,12 +74,13 @@ def process_region(
 
 @click.command()
 @click.option("--services", "-s", multiple=True, help="Services to download (default: all)")
+@click.option("--services-file", "-f", type=click.Path(exists=True), help="File containing list of services (one per line)")
 @click.option("--regions", "-r", multiple=True, help="Specific regions to process (default: all available)")
 @click.option("--exclude-regions", "-x", multiple=True, help="Regions to exclude")
 @click.option("--concurrency", "-c", default=5, help="Max concurrent regions")
 @click.option("--profile", "-p", help="AWS Profile")
 @click.option("--debug", is_flag=True, help="Enable debug logging")
-def main(services, regions, exclude_regions, concurrency, profile, debug):
+def main(services, services_file, regions, exclude_regions, concurrency, profile, debug):
     """
     AWS Resource Metadata Downloader.
     """
@@ -103,11 +104,29 @@ def main(services, regions, exclude_regions, concurrency, profile, debug):
 
     # 3. Determine Services
     available_services = registry.list_services()
-    if not services:
+    target_services_set = set()
+
+    # Add from CLI args
+    if services:
+        target_services_set.update(services)
+
+    # Add from File
+    if services_file:
+        try:
+            with open(services_file, "r") as f:
+                file_services = [line.strip() for line in f if line.strip()]
+                target_services_set.update(file_services)
+        except Exception as e:
+            logger.error(f"Failed to read services file: {e}")
+            sys.exit(1)
+
+    # If no services specified, default to ALL
+    if not target_services_set:
         target_services = available_services
     else:
-        target_services = [s for s in services if s in available_services]
-        invalid = set(services) - set(available_services)
+        # Validate and Filter
+        target_services = [s for s in target_services_set if s in available_services]
+        invalid = target_services_set - set(available_services)
         if invalid:
             logger.warning(f"Skipping unknown services: {invalid}")
 
