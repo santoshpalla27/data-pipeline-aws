@@ -14,7 +14,12 @@ class StorageManager:
     """
 
     def __init__(self, base_dir: Path = Path("data/resource_metadata")):
-        self.base_dir = base_dir
+        self.base_dir = Path(base_dir).resolve()
+        try:
+            self.base_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Failed to create base_dir {self.base_dir}: {e}")
+            raise
 
     def save_page(
         self,
@@ -36,13 +41,25 @@ class StorageManager:
         ts_str = timestamp.strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"{ts_str}_page{page_num}.json"
         file_path = output_dir / filename
+        
+        # Prepare content with metadata
+        content = {
+            "_meta": {
+                "service": service,
+                "resource": resource,
+                "region": region,
+                "page": page_num,
+                "timestamp": timestamp.isoformat()
+            },
+            "payload": data
+        }
 
         # Atomic write (write to .tmp then rename)
         temp_path = file_path.with_suffix(".tmp")
         
         try:
             with open(temp_path, "wb") as f:
-                f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
+                f.write(orjson.dumps(content, option=orjson.OPT_INDENT_2))
             
             # Atomic rename
             temp_path.rename(file_path)

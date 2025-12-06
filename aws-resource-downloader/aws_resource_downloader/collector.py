@@ -41,7 +41,7 @@ class BaseCollector:
                 # We wrap the iterator to handle retries on individual pages if possible,
                 # but standard boto3 paginators retry internally for throttling.
                 # We add an outer retry just in case.
-                for page in self._paginate_safely(paginator, **self.config.pagination_config):
+                for page in self._get_paginator_page(paginator, **self.config.pagination_config):
                     yield self._extract_data(page)
             except Exception as e:
                 logger.error(f"Pagination failed for {self.service}.{self.config.name} in {region}: {e}")
@@ -59,19 +59,29 @@ class BaseCollector:
 
     @retry(
         retry=retry_if_exception_type((ClientError, BotoCoreError)),
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        stop=stop_after_attempt(6),
+        wait=wait_exponential(multiplier=1, min=1, max=30),
         reraise=True
     )
     def _call_safely(self, method, **kwargs):
-        """Execute a boto3 method with retries."""
-        return method(**kwargs)
+        """Execute a boto3 method with retries and improved logging."""
+        try:
+            return method(**kwargs)
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code")
+            req_id = e.response.get("ResponseMetadata", {}).get("RequestId")
+            logger.warning(f"ClientError {code} req_id={req_id} for {self.service}.{self.config.name}: {e}")
+            raise
 
-    def _paginate_safely(self, paginator, **kwargs):
+    @retry(
+        retry=retry_if_exception_type((ClientError, BotoCoreError)),
+        stop=stop_after_attempt(6),
+        wait=wait_exponential(multiplier=1, min=1, max=30),
+        reraise=True
+    )
+    def _get_paginator_page(self, paginator, **kwargs):
         """
-        Yield pages from paginator.
-        Note: Paginator.paginate() returns an iterator. 
-        If an error occurs mid-stream, it raises.
+        Yield pages from paginator with retry on iterator creation/access.
         """
         return paginator.paginate(**kwargs)
 

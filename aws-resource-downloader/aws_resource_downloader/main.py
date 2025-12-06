@@ -40,19 +40,19 @@ def process_region(
         try:
             collector = BaseCollector(session_manager, service_name, resource_cfg)
             
-            # Determine actual region to use for call
+            # Determine actual region to use for API call
             # For non-regional resources (like S3), use session's default or us-east-1
-            target_region = region
+            api_region = region
             if not resource_cfg.regional:
-                target_region = session_manager.region or "us-east-1"
+                api_region = session_manager.region or "us-east-1"
                 
             page_count = 0
-            for page_data in collector.collect(target_region):
+            for page_data in collector.collect(api_region):
                 page_count += 1
                 storage.save_page(
                     service=service_name,
                     resource=resource_cfg.name,
-                    region=target_region,
+                    region=region, # Use the logical region name (e.g., "global") for storage
                     data=page_data,
                     page_num=page_count,
                     timestamp=timestamp
@@ -60,7 +60,7 @@ def process_region(
             
             results["success"] += 1
             results["pages"] += page_count
-            logger.info(f"Completed {service_name}.{resource_cfg.name} in {target_region} ({page_count} pages)")
+            logger.info(f"Completed {service_name}.{resource_cfg.name} in {region} ({page_count} pages)")
             
             # If not regional, we only run once. Break loop if this function was called in a region loop 
             # but we want to avoid duplicates? 
