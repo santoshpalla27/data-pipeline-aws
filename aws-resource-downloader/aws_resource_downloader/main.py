@@ -1,190 +1,182 @@
 """
-Main CLI Orchestrator.
+AWS Resource Downloader Orchestrator (V2).
 """
+import argparse
 import sys
-import boto3
-import click
-from datetime import datetime, timezone
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import defaultdict
+from pathlib import Path
+
 from loguru import logger
-from rich.console import Console
-from rich.progress import Progress
-
+from aws_resource_downloader.registry import registry, ServiceConfig, ResourceConfig
 from aws_resource_downloader.session import AwsSessionManager
-from aws_resource_downloader.registry import registry
-from aws_resource_downloader.collector import BaseCollector
 from aws_resource_downloader.storage import StorageManager
+from aws_resource_downloader.collector import BaseCollector
 
-console = Console()
+# Configure logger
+logger.remove()
+logger.add(sys.stderr, level="INFO")
+logger.add("download.log", rotation="10 MB")
 
-def setup_logging(debug: bool):
-    """Configure Loguru."""
-    logger.remove()
-    level = "DEBUG" if debug else "INFO"
-    logger.add(sys.stderr, level=level, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>")
+def parse_args():
+    parser = argparse.ArgumentParser(description="AWS Resource Downloader V2")
+    parser.add_argument("--services-file", type=Path, default=Path("services.txt"), help="Path to services list")
+    parser.add_argument("--concurrency", type=int, default=5, help="Max concurrent regions per service")
+    parser.add_argument("--regions", nargs="+", help="Explicit list of regions to target (overrides discovery)")
+    parser.add_argument("--profile", help="AWS Profile")
+    parser.add_argument("--region", help="Default AWS Region")
+    parser.add_argument("--compress", action="store_true", default=True, help="Compress output (default: True)")
+    return parser.parse_args()
 
-def process_region(
-    service_name: str,
-    region: str,
-    resources,
-    session_manager,
-    storage,
-    timestamp
-):
+def load_services(file_path: Path) -> list[str]:
+    if not file_path.exists():
+        logger.error(f"Services file not found: {file_path}")
+        return []
+    with open(file_path) as f:
+        return [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
+def process_resource_region(
+    service_name: str, # Registry Key (e.g. AmazonS3)
+    resource_cfg: ResourceConfig,
+    scan_region: str, # Region to CALL API
+    save_region: str, # Region to SAVE data under (e.g. "global")
+    session_manager: AwsSessionManager,
+    storage: StorageManager
+) -> dict:
     """
-    Worker function to process all resources for a service in a single region.
+    Worker function to download a single resource in a single region.
     """
-    results = {"success": 0, "failed": 0, "pages": 0}
+    stats = {"pages": 0, "status": "success", "error": None}
     
-    for resource_cfg in resources:
-        try:
-            collector = BaseCollector(session_manager, service_name, resource_cfg)
-            
-            # Determine actual region to use for API call
-            # For non-regional resources (like S3), use session's default or us-east-1
-            api_region = region
-            if not resource_cfg.regional:
-                api_region = session_manager.region or "us-east-1"
-                
-            page_count = 0
-            for page_data in collector.collect(api_region):
-                page_count += 1
-                storage.save_page(
-                    service=service_name,
-                    resource=resource_cfg.name,
-                    region=region, # Use the logical region name (e.g., "global") for storage
-                    data=page_data,
-                    page_num=page_count,
-                    timestamp=timestamp
-                )
-            
-            results["success"] += 1
-            results["pages"] += page_count
-            logger.info(f"Completed {service_name}.{resource_cfg.name} in {region} ({page_count} pages)")
-            
-            # If not regional, we only run once. Break loop if this function was called in a region loop 
-            # but we want to avoid duplicates? 
-            # Actually, the orchestrator should handle "don't loop regions if not regional".
-            
-        except Exception as e:
-            results["failed"] += 1
-            logger.error(f"Failed {service_name}.{resource_cfg.name} in {region}: {e}")
-            
-    return results
-
-@click.command()
-@click.option("--services", "-s", multiple=True, help="Services to download (default: all)")
-@click.option("--services-file", "-f", type=click.Path(exists=True), help="File containing list of services (one per line)")
-@click.option("--regions", "-r", multiple=True, help="Specific regions to process (default: all available)")
-@click.option("--exclude-regions", "-x", multiple=True, help="Regions to exclude")
-@click.option("--concurrency", "-c", default=5, help="Max concurrent regions")
-@click.option("--profile", "-p", help="AWS Profile")
-@click.option("--debug", is_flag=True, help="Enable debug logging")
-def main(services, services_file, regions, exclude_regions, concurrency, profile, debug):
-    """
-    AWS Resource Metadata Downloader.
-    """
-    setup_logging(debug)
-    timestamp = datetime.now(timezone.utc)
-    
-    # 1. Setup Session
     try:
-        session_manager = AwsSessionManager(profile=profile)
-        identity = session_manager.get_caller_identity()
-        if not identity:
-            logger.error("Failed to authenticate with AWS. Check credentials.")
-            sys.exit(1)
-        logger.info(f"Authenticated as {identity.get('Arn')}")
-    except Exception as e:
-        logger.critical(f"AWS Setup Failed: {e}")
-        sys.exit(1)
-
-    # 2. Setup Storage
-    storage = StorageManager()
-
-    # 3. Determine Services
-    available_services = registry.list_services()
-    target_services_set = set()
-
-    # Add from CLI args
-    if services:
-        target_services_set.update(services)
-
-    # Add from File
-    if services_file:
-        try:
-            with open(services_file, "r") as f:
-                file_services = [line.strip() for line in f if line.strip()]
-                target_services_set.update(file_services)
-        except Exception as e:
-            logger.error(f"Failed to read services file: {e}")
-            sys.exit(1)
-
-    # If no services specified, default to ALL
-    if not target_services_set:
-        target_services = available_services
-    else:
-        # Validate and Filter
-        target_services = [s for s in target_services_set if s in available_services]
-        invalid = target_services_set - set(available_services)
-        if invalid:
-            logger.warning(f"Skipping unknown services: {invalid}")
-
-    # 4. Processing Loop
-    logger.info(f"Starting download for services: {target_services}")
-    
-    with Progress() as progress:
-        task_id = progress.add_task("[cyan]Processing...", total=len(target_services))
+        collector = BaseCollector(session_manager, registry.get_service(service_name).service_name, resource_cfg)
         
-        for service_name in target_services:
-            service_config = registry.get_service(service_name)
-            
-            # Split resources into regional vs global
-            regional_resources = [r for r in service_config.resources if r.regional]
-            global_resources = [r for r in service_config.resources if not r.regional]
-            
-            # 4a. Process Global Resources (Once)
-            if global_resources:
-                logger.info(f"Processing global resources for {service_name}")
-                process_region(service_config.service_name, "global", global_resources, session_manager, storage, timestamp)
+        page_num = 0
+        for page_data in collector.collect(scan_region):
+            page_num += 1
+            storage.save_page(
+                service=service_name,
+                resource=resource_cfg.name,
+                region=save_region,
+                data=page_data,
+                page_num=page_num,
+                metadata={
+                    "scan_region": scan_region,
+                    "api_method": resource_cfg.api_method
+                }
+            )
+        
+        stats["pages"] = page_num
+        if page_num == 0:
+             # Could be valid empty (no resources), or failed before yield
+             pass
 
-            # 4b. Process Regional Resources
-            if regional_resources:
-                # Discover regions
-                if regions:
-                    target_regions = regions
+    except Exception as e:
+        stats["status"] = "failed"
+        stats["error"] = str(e)
+        logger.error(f"Worker failed for {service_name}.{resource_cfg.name} in {scan_region}: {e}")
+        
+    return stats
+
+def main():
+    args = parse_args()
+    
+    # 1. Setup Run
+    run_start = datetime.utcnow()
+    run_id = f"run_{run_start.strftime('%Y-%m-%dT%H-%M-%SZ')}"
+    logger.info(f"Starting Download Run: {run_id}")
+    
+    # 2. Init Components
+    session_manager = AwsSessionManager(profile=args.profile, region=args.region)
+    storage = StorageManager(Path("data/resource_metadata"), run_id, compress=args.compress)
+    
+    # 3. Load Targets
+    target_service_keys = load_services(args.services_file)
+    logger.info(f"Loaded {len(target_service_keys)} target services.")
+    
+    # 4. Processing Loop
+    run_stats = defaultdict(lambda: {"success": 0, "failed": 0, "pages": 0})
+    
+    for service_key in target_service_keys:
+        service_cfg = registry.get_service(service_key)
+        
+        if not service_cfg:
+            logger.warning(f"Skipping unknown service: {service_key}")
+            continue
+            
+        logger.info(f"Processing Service: {service_key} ({service_cfg.service_name})")
+        
+        # Determine Regions
+        # If user provided explicit regions, use them. Else discover.
+        # Note: Discovery intersects with Account Enabled Regions.
+        if args.regions:
+            available_regions = args.regions
+        else:
+            available_regions = session_manager.get_available_regions(service_cfg.service_name)
+
+        if not available_regions:
+            logger.warning(f"No available regions found for {service_key}")
+            continue
+
+        # Prepare Work Items
+        futures = {}
+        with ThreadPoolExecutor(max_workers=args.concurrency) as executor:
+            
+            for resource in service_cfg.resources:
+                
+                # CASE A: REGIONAL RESOURCE
+                if resource.regional:
+                    for reg in available_regions:
+                        # Schedule worker
+                        future = executor.submit(
+                            process_resource_region,
+                            service_key, resource, reg, reg, session_manager, storage
+                        )
+                        futures[future] = f"{service_key}.{resource.name} ({reg})"
+                
+                # CASE B: GLOBAL RESOURCE
                 else:
-                    target_regions = session_manager.get_available_regions(service_config.service_name)
-                    # Filter exclusions
-                    target_regions = [r for r in target_regions if r not in exclude_regions]
-                
-                logger.info(f"Processing {len(target_regions)} regions for {service_name}")
-                
-                # Use ThreadPool for regions
-                with ThreadPoolExecutor(max_workers=concurrency) as executor:
-                    futures = {
-                        executor.submit(
-                            process_region, 
-                            service_config.service_name, 
-                            r, 
-                            regional_resources, 
-                            session_manager, 
-                            storage, 
-                            timestamp
-                        ): r for r in target_regions
-                    }
+                    # Determine where to call
+                    scan_region = resource.forced_region or session_manager.region or "us-east-1"
+                    save_region = "global"
                     
-                    for future in as_completed(futures):
-                        r = futures[future]
-                        try:
-                            res = future.result()
-                            # logger.debug(f"Region {r} stats: {res}")
-                        except Exception as e:
-                            logger.error(f"Region task failed for {r}: {e}")
+                    future = executor.submit(
+                        process_resource_region,
+                        service_key, resource, scan_region, save_region, session_manager, storage
+                    )
+                    futures[future] = f"{service_key}.{resource.name} (global)"
+            
+            # Collect Results
+            for future in as_completed(futures):
+                desc = futures[future]
+                try:
+                    res = future.result()
+                    if res["status"] == "success":
+                        run_stats[service_key]["success"] += 1
+                        run_stats[service_key]["pages"] += res["pages"]
+                    else:
+                        run_stats[service_key]["failed"] += 1
+                except Exception as e:
+                    logger.error(f"Unhandled exception in future {desc}: {e}")
+                    run_stats[service_key]["failed"] += 1
 
-            progress.advance(task_id)
-
-    logger.success("Download complete!")
+    # 5. Summary Report
+    logger.info("="*60)
+    logger.info("RUN SUMMARY")
+    logger.info(f"Run ID: {run_id}")
+    logger.info("-" * 60)
+    logger.info(f"{'Service':<20} | {'Pages':<8} | {'Tasks OK':<8} | {'Failed':<8}")
+    logger.info("-" * 60)
+    
+    total_pages = 0
+    for svc, s in run_stats.items():
+        logger.info(f"{svc:<20} | {s['pages']:<8} | {s['success']:<8} | {s['failed']:<8}")
+        total_pages += s['pages']
+        
+    logger.info("="*60)
+    logger.info(f"Total Pages Downloaded: {total_pages}")
+    logger.info(f"Data stored in: {storage.run_dir}")
 
 if __name__ == "__main__":
     main()

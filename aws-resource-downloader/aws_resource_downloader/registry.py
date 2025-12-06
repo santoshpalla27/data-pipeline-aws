@@ -1,12 +1,19 @@
 """
-Service Registry Definition.
+Service Registry Definition (V2).
 """
-from typing import List, Dict
+from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
-from aws_resource_downloader.collector import ResourceConfig
+
+class ResourceConfig(BaseModel):
+    name: str # e.g. "instances"
+    api_method: str # e.g. "describe_instances"
+    response_key: str | None = None # e.g. "Reservations"
+    pagination_config: Dict[str, Any] = {} # e.g. {"Scope": "REGIONAL"}
+    regional: bool = True # If False, only One region (Global) is queried.
+    forced_region: Optional[str] = None # e.g. "us-east-1" for CloudFront/WAF Global
 
 class ServiceConfig(BaseModel):
-    service_name: str
+    service_name: str # Boto3 client name, e.g. "ec2"
     resources: List[ResourceConfig]
 
 class ServiceRegistry:
@@ -80,6 +87,12 @@ class ServiceRegistry:
                     {"name": "backup_vaults", "api_method": "list_backup_vaults", "response_key": "BackupVaultList"}
                 ]
             },
+            "AmazonS3GlacierDeepArchive": {
+                "service_name": "glacier",
+                "resources": [
+                    {"name": "vaults", "api_method": "list_vaults", "response_key": "VaultList"}
+                ]
+            },
 
             # Database
             "AmazonRDS": {
@@ -102,6 +115,12 @@ class ServiceRegistry:
                     {"name": "replication_groups", "api_method": "describe_replication_groups", "response_key": "ReplicationGroups"}
                 ]
             },
+            "AmazonRedshift": {
+                "service_name": "redshift",
+                "resources": [
+                    {"name": "clusters", "api_method": "describe_clusters", "response_key": "Clusters"}
+                ]
+            },
 
             # Networking
             "AmazonVPC": {
@@ -109,10 +128,11 @@ class ServiceRegistry:
                 "resources": [
                     {"name": "vpcs", "api_method": "describe_vpcs", "response_key": "Vpcs"},
                     {"name": "subnets", "api_method": "describe_subnets", "response_key": "Subnets"},
-                    {"name": "security_groups", "api_method": "describe_security_groups", "response_key": "SecurityGroups"}
+                    {"name": "security_groups", "api_method": "describe_security_groups", "response_key": "SecurityGroups"},
+                    {"name": "nat_gateways", "api_method": "describe_nat_gateways", "response_key": "NatGateways"}
                 ]
             },
-            "AWSELB": {
+            "AWSELB": { # ELBv2 (ALB/NLB)
                 "service_name": "elbv2",
                 "resources": [
                     {"name": "load_balancers", "api_method": "describe_load_balancers", "response_key": "LoadBalancers"}
@@ -121,13 +141,13 @@ class ServiceRegistry:
             "AmazonRoute53": {
                 "service_name": "route53",
                 "resources": [
-                    {"name": "hosted_zones", "api_method": "list_hosted_zones", "response_key": "HostedZones", "regional": False}
+                    {"name": "hosted_zones", "api_method": "list_hosted_zones", "response_key": "HostedZones", "regional": False, "forced_region": "us-east-1"}
                 ]
             },
             "AmazonCloudFront": {
                 "service_name": "cloudfront",
                 "resources": [
-                    {"name": "distributions", "api_method": "list_distributions", "response_key": "DistributionList", "regional": False}
+                    {"name": "distributions", "api_method": "list_distributions", "response_key": "DistributionList", "regional": False, "forced_region": "us-east-1"}
                 ]
             },
             "AmazonApiGateway": {
@@ -139,7 +159,8 @@ class ServiceRegistry:
             "AWSGlobalAccelerator": {
                 "service_name": "globalaccelerator",
                 "resources": [
-                    {"name": "accelerators", "api_method": "list_accelerators", "response_key": "Accelerators", "regional": False}
+                    {"name": "accelerators", "api_method": "list_accelerators", "response_key": "Accelerators", "regional": False, "forced_region": "us-west-2"} 
+                    # Note: GlobalAccelerator API endpoint is usually us-west-2 based despite being global
                 ]
             },
 
@@ -168,8 +189,8 @@ class ServiceRegistry:
                     {"name": "clusters", "api_method": "list_clusters", "response_key": "ClusterInfoList"}
                 ]
             },
-            "awSEvents": {
-                "service_name": "events",
+            "AWSEvents": { # Fixed capitalization
+                "service_name": "events", # EventBridge
                 "resources": [
                     {"name": "event_buses", "api_method": "list_event_buses", "response_key": "EventBuses"},
                     {"name": "rules", "api_method": "list_rules", "response_key": "Rules"}
@@ -224,19 +245,21 @@ class ServiceRegistry:
             "awswaf": {
                 "service_name": "wafv2",
                 "resources": [
+                    # Defaulting to REGIONAL to avoid 'Scope' error. 
+                    # If users want CLOUDFRONT scope, they might need a separate service entry or flag.
                     {"name": "web_acls", "api_method": "list_web_acls", "response_key": "WebACLs", "pagination_config": {"Scope": "REGIONAL"}}
                 ]
             },
             "AWSShield": {
                 "service_name": "shield",
                 "resources": [
-                    {"name": "protections", "api_method": "list_protections", "response_key": "Protections", "regional": False}
+                    {"name": "protections", "api_method": "list_protections", "response_key": "Protections", "regional": False, "forced_region": "us-east-1"}
                 ]
             },
             "AWSFMS": {
                 "service_name": "fms",
                 "resources": [
-                    {"name": "policies", "api_method": "list_policies", "response_key": "PolicyList", "regional": False}
+                    {"name": "policies", "api_method": "list_policies", "response_key": "PolicyList", "regional": False, "forced_region": "us-east-1"}
                 ]
             },
 
@@ -247,7 +270,7 @@ class ServiceRegistry:
                     {"name": "repositories", "api_method": "list_repositories", "response_key": "repositories"}
                 ]
             },
-            "CodeBuild": {
+            "CodeBuild": { # Alias for CodeBuild
                 "service_name": "codebuild",
                 "resources": [
                     {"name": "projects", "api_method": "list_projects", "response_key": "projects"}
@@ -277,6 +300,12 @@ class ServiceRegistry:
                     {"name": "repositories", "api_method": "describe_repositories", "response_key": "repositories"}
                 ]
             },
+            "AmazonECRPublic": { # Maps to ecr-public
+                "service_name": "ecr-public",
+                "resources": [
+                    {"name": "repositories", "api_method": "describe_repositories", "response_key": "repositories", "regional": False, "forced_region": "us-east-1"}
+                ]
+            },
             "AWSXRay": {
                 "service_name": "xray",
                 "resources": [
@@ -296,9 +325,16 @@ class ServiceRegistry:
                 "resources": [
                     {"name": "state_machines", "api_method": "list_state_machines", "response_key": "stateMachines"}
                 ]
+            },
+            "AmazonES": { # legacy ES / OpenSearch
+                "service_name": "opensearch",
+                "resources": [
+                     {"name": "domains", "api_method": "list_domain_names", "response_key": "DomainNames"}
+                ]
             }
         }
 
+        # Handle Case Insensitivity /Aliases via copy if needed, but for now rely on exact keys from Pricing API
         for name, cfg in DEFAULT_REGISTRY.items():
             self._services[name] = ServiceConfig(**cfg)
 
