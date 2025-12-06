@@ -146,7 +146,7 @@ def main(services, services_file, regions, exclude_regions, concurrency, profile
             # 4a. Process Global Resources (Once)
             if global_resources:
                 logger.info(f"Processing global resources for {service_name}")
-                process_region(service_name, "global", global_resources, session_manager, storage, timestamp)
+                process_region(service_config.service_name, "global", global_resources, session_manager, storage, timestamp)
 
             # 4b. Process Regional Resources
             if regional_resources:
@@ -154,7 +154,7 @@ def main(services, services_file, regions, exclude_regions, concurrency, profile
                 if regions:
                     target_regions = regions
                 else:
-                    target_regions = session_manager.get_available_regions(service_name)
+                    target_regions = session_manager.get_available_regions(service_config.service_name)
                     # Filter exclusions
                     target_regions = [r for r in target_regions if r not in exclude_regions]
                 
@@ -165,7 +165,7 @@ def main(services, services_file, regions, exclude_regions, concurrency, profile
                     futures = {
                         executor.submit(
                             process_region, 
-                            service_name, 
+                            service_config.service_name, 
                             r, 
                             regional_resources, 
                             session_manager, 
